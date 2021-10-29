@@ -4,8 +4,8 @@ import asyncio
 from binance.client import AsyncClient
 from binance import BinanceSocketManager
 from time import sleep
-from key import api_key,secret_key
-from config import symbol
+from config.key import api_key,secret_key
+from config.config import symbol
 
 class DataCollector():
     def __init__(self,api_key,secret_key,symbol='BTCUSDT',pause=1):

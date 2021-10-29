@@ -1,13 +1,15 @@
+from numpy import NaN
 import pandas as pd
 import sqlalchemy
 from binance.client import AsyncClient
 from binance import BinanceSocketManager
 from enum import Enum
 from time import sleep
-from key import api_key,secret_key
-from config import symbol
+from config.key import api_key,secret_key
+from config.config import symbol,backward_steps
 import datetime as dt
 from agent import Agent
+from scipy.stats import linregress
 
 
 class LookBackEnum(Enum):
@@ -15,7 +17,7 @@ class LookBackEnum(Enum):
     TIMESTAMP = 2
 
 class Trader():
-    def __init__(self,api_key,secret_key,symbol='BTCUSDT',pause=1):
+    def __init__(self,api_key,secret_key,symbol='BTCUSDT',pause=1,backward_steps=3):
         '''apy_key: apy_key of Binance client
             secret_key: secret_key of Binance client
             symbol: [str] symbol of crypto (default 'BTCUSDT')
@@ -26,7 +28,7 @@ class Trader():
         self.engine = sqlalchemy.create_engine('sqlite:///data/{}_stream.db'.format(symbol))
         self.store_engine = sqlalchemy.create_engine('sqlite:///data/{}_order_stream.db'.format(symbol))
         self.pause = pause
-        self.agent = Agent(symbol)
+        self.agent = Agent(symbol,backward_steps)
 
     def trade_with_agent(self,qty):
         order = None
@@ -41,15 +43,18 @@ class Trader():
             actual_time = last_row.iloc[0]['time']
 
             # se il prezzo scendera', vendo
+            # vendo solo se il guadagno previsto è maggiore di 1
             if actual_price > future_price and total_qty>=qty:
                 order = {'transactTime':actual_time,'price':actual_price,'qty':qty,'type':'SELL'}
-                balance += order['price']*order['qty']
                 buy_order = store[0]
-                store = store[1:]
-                profit += self.get_transaction_profit(buy_order,order)
-                total_qty -= qty
-                print("predicted {} > actual {}".format(future_price,actual_price))
-                print("sold: {}".format(order))
+                partial_profit = self.get_transaction_profit(buy_order,order)
+                if partial_profit > 0.01:
+                    balance += order['price']*order['qty']
+                    store = store[1:]
+                    profit += partial_profit
+                    total_qty -= qty
+                    print("predicted {} > actual {}".format(future_price,actual_price))
+                    print("sold: {}".format(order))
             # se il prezzo salira', compro
             if actual_price < future_price and balance > actual_price*qty:
                 order = {'transactTime':actual_time,'price':actual_price,'qty':qty,'type':'BUY'}
@@ -58,7 +63,7 @@ class Trader():
                 total_qty += qty
                 print("predicted {} < actual {}".format(future_price,actual_price))
                 print("bought: {}".format(order))
-            # quanto ho in assa
+            # quanto ho in cassa?
             if order is not None:
                 self.store_order(order)
                 print("\nactual balance: {}".format(balance))
@@ -69,6 +74,80 @@ class Trader():
                     print(el)
                 print("\n")
                 order = None
+
+    def get_gradient(self,df):
+        '''0:stable
+            1: increasing
+            -1:decreasing'''
+        df.time = df.time.apply(lambda x: x.value)
+        prices = df['price'].tolist()
+        times = df['time'].tolist()
+        slope = linregress(times,prices).slope
+        if slope is NaN :
+            return 0
+        if slope > 0:
+            return 1
+        return -1
+    
+    def trade_with_history(self,qty):
+        order = None
+        total_qty = 0
+        balance = 250
+        store = []
+        profit = 0
+        last_gradients = []
+        # recupero un po' di info
+        while len(last_gradients)<3:
+            new_gradient = self.get_gradient(self.get_lookback(LookBackEnum.ROWS,3))
+            last_gradients.append(new_gradient)
+            sleep(self.pause)
+            
+        while True:
+            # valori attuali
+            last_row = self.get_lookback(LookBackEnum.ROWS,1)
+            actual_price = last_row.iloc[0]['price']
+            actual_time = last_row.iloc[0]['time']
+
+            # valuto andamento
+            new_gradient = self.get_gradient(self.get_lookback(LookBackEnum.ROWS,3))
+            last_gradients = last_gradients[1:]
+            last_gradients.append(new_gradient)
+            
+            # sto crescendo...se ho ancora denaro, compro
+            if sum(last_gradients) == len(last_gradients):
+                print("sto crescendo")
+                while balance > actual_price*qty:
+                    order = {'transactTime':actual_time,'price':actual_price,'qty':qty,'type':'BUY'}
+                    balance -= order['price']*order['qty']
+                    store.append(order)
+                    total_qty += qty
+                    print("bought: {}".format(order))
+             # sto calando...se ho ancora crediti, vendo
+            elif sum(last_gradients) == -len(last_gradients):
+                print("sto calando")
+                while total_qty>=qty:
+                    order = {'transactTime':actual_time,'price':actual_price,'qty':qty,'type':'SELL'}
+                    balance += order['price']*order['qty']
+                    buy_order = store[0]
+                    partial_profit = self.get_transaction_profit(buy_order,order)
+                    store = store[1:]
+                    profit += partial_profit
+                    total_qty -= qty
+                    print("sold: {}".format(order))
+            else:
+                print("sono stabile")
+            # quanto ho in cassa?
+            if order is not None:
+                self.store_order(order)
+                print("\nactual balance: {}".format(balance))
+                print("actual profit: {}".format(profit))
+                print("actual qty: {}".format(total_qty))
+                print("storage: ")
+                for el in store:
+                    print(el)
+                print("\n")
+                order = None
+            sleep(self.pause)
             
 
     def trade(self, entry_level, lookback, qty, min_profit, max_loss):
@@ -159,14 +238,15 @@ class Trader():
 def init():
     '''Initialization of trader'''
     print("staring initialization...")
-    myTrader = Trader(api_key,secret_key,symbol)
+    myTrader = Trader(api_key,secret_key,symbol,backward_steps=backward_steps)
     print("initialization of trader completed...")
     return myTrader
 
 
 def main():
     trader = init()
-    trader.trade_with_agent(0.001)
+    #trader.trade_with_agent(0.001)
+    trader.trade_with_history(0.001)
     #trader.trade(0,500,0.001,0.001,0.01)
     print("collector stopped")
 
