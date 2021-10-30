@@ -2,7 +2,6 @@ import pandas as pd
 import sqlalchemy
 from config.config import symbol,backward_steps
 from matplotlib import pyplot as plt
-from agent import Agent
 
 class DataAnalyzer():
     def __init__(self,symbol='BTCUSDT',pause=1,backward_steps=3):
@@ -11,7 +10,6 @@ class DataAnalyzer():
         self.symbol = symbol
         self.engine = sqlalchemy.create_engine('sqlite:///data/{}_stream.db'.format(symbol))
         self.pause = pause
-        self.agent = Agent(symbol,backward_steps)
 
 
     def plot_data(self):
