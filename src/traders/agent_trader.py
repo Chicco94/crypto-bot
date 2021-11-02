@@ -1,5 +1,6 @@
-from base_trader import BaseTrader,LookBackEnum
+from traders.base_trader import LookBackEnum
 from agent import Agent
+from traders.base_trader import BaseTrader
 
 class AgentTrader(BaseTrader):
     def __init__(self,backward_steps=20):

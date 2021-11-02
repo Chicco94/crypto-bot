@@ -19,7 +19,6 @@ class DataAnalyzer():
         while True:
             df = self.getFrame()
             ax = df.plot(x='time',y='price', ax=ax)
-            df = self.agent.get_sample()
             # df['predicted'] = self.agent.predict()[0]
             # ax = df.plot(x='time1',y='predicted', ax=ax)
             plt.draw()

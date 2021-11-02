@@ -1,2 +1,2 @@
 symbol = 'BTCUSDT'
-backward_steps = 20
+backward_steps = 3

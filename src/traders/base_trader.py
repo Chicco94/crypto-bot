@@ -1,4 +1,3 @@
-from typing import List, Sequence, Union
 import pandas as pd
 import sqlalchemy
 from binance.client import AsyncClient
@@ -6,7 +5,7 @@ from binance import BinanceSocketManager
 from enum import Enum
 from time import sleep
 import datetime as dt
-from order import Order
+from traders.order import Order
 
 
 class LookBackEnum(Enum):
@@ -41,7 +40,7 @@ class BaseTrader():
 
 
     def get_transaction_profit(self,buy_order:Order,sell_order:Order):
-        return sell_order.value()*buy_order.value()
+        return sell_order.value()-buy_order.value()
 
 
     def store_order(self,order:Order):
@@ -76,7 +75,7 @@ class BaseTrader():
             return None
 
 
-    def simulate_sell(self,qty:float)->List[Order,Order]:
+    def simulate_sell(self,qty:float):
         try:
             # get order
             # get last rows
@@ -93,7 +92,7 @@ class BaseTrader():
             return None
 
 
-    def sell(self,qty:float)->List[Order,Order]:
+    def sell(self,qty:float):
         try:
             # get order
             # get last rows
@@ -112,6 +111,7 @@ class BaseTrader():
 
             buy_order = self.acquired_crypto[0]
             self.acquired_crypto = self.acquired_crypto[1:]
+            self.profit += self.get_transaction_profit(buy_order,sell_order)
 
             return sell_order,buy_order
         except Exception as e:
