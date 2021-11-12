@@ -1,3 +1,4 @@
+from threading import Lock
 import pandas as pd
 import sqlalchemy
 import asyncio
@@ -8,7 +9,7 @@ from config.key import api_key,secret_key
 from config.config import symbol
 
 class DataCollector():
-    def __init__(self,api_key,secret_key,symbol='BTCUSDT',pause=1):
+    def __init__(self,api_key,secret_key,symbol='BTCUSDT',db_lock:Lock=None,pause=1):
         '''apy_key: apy_key of Binance client
             secret_key: secret_key of Binance client
             symbol: [str] symbol of crypto (default 'BTCUSDT')
@@ -17,6 +18,7 @@ class DataCollector():
         self.client = AsyncClient(api_key,secret_key)
         self.bsm = BinanceSocketManager(self.client)
         self.engine = sqlalchemy.create_engine('sqlite:///data/{}_stream.db'.format(symbol))
+        self.db_lock = db_lock
         self.pause = pause
 
 
@@ -30,7 +32,9 @@ class DataCollector():
                     print(e)
                 finally:
                     frame = self.createFrame(res)
+                    self.db_lock.acquire()
                     frame.to_sql(self.symbol,self.engine,if_exists='append',index=False)
+                    self.db_lock.release()
                     sleep(self.pause)
 
 

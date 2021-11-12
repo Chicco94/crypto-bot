@@ -1,22 +1,38 @@
-from traders.heuristic_trader import HeuristicTrader
+import asyncio
+from threading import Lock
 from config.key import api_key,secret_key
 from config.config import symbol,backward_steps
-
-def init():
-    '''Initialization of trader'''
-    print("staring initialization...")
-    myTrader = HeuristicTrader(api_key,secret_key,symbol,backward_steps=backward_steps)
-    print("initialization of trader completed...")
-    return myTrader
+from data_collector import DataCollector
+from traders.traders import HeuristicTrader,AgentTrader,CumRetTrader
 
 
-def main():
-    trader = init()
-    #trader.trade_with_agent(0.001)
-    trader.trade(0.001)
-    #trader.trade(0,500,0.001,0.001,0.01)
+async def main():
+    console_lock = Lock()
+    db_lock = Lock()
+    data_collector = DataCollector(api_key,secret_key,symbol,db_lock=db_lock)
+
+    heuristic_trader = HeuristicTrader(api_key,secret_key,symbol,db_lock=db_lock,backward_steps=backward_steps,console_lock=console_lock)
+    free_heuristic_trader = HeuristicTrader(api_key,secret_key,symbol,db_lock=db_lock,backward_steps=backward_steps,console_lock=console_lock,with_profit_control=False,name="free_heuristic")
+    agent_trader = AgentTrader(api_key,secret_key,symbol,db_lock=db_lock,console_lock=console_lock)
+    free_agent_trader = AgentTrader(api_key,secret_key,symbol,db_lock=db_lock,console_lock=console_lock,with_profit_control=False,name="free_agent")
+    cum_ret_trader = CumRetTrader(api_key,secret_key,symbol,db_lock=db_lock,console_lock=console_lock)
+
+    heuristic_trader.start()
+    free_heuristic_trader.start()
+    agent_trader.start()
+    free_agent_trader.start()
+    cum_ret_trader.start()
+
+    await data_collector.get_data()
+
+    heuristic_trader.join()
+    free_heuristic_trader.join()
+    agent_trader.join()
+    free_agent_trader.join()
+    cum_ret_trader.join()
     print("collector stopped")
 
 
 if __name__=="__main__":
-    main()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())

@@ -10,7 +10,7 @@ class Agent():
     def __init__(self,symbol,backward_steps):
         self.symbol = symbol
         self.engine = sqlalchemy.create_engine('sqlite:///data/{}_stream.db'.format(symbol))
-        self.model = joblib.load('models/model_best.sav')
+        self.model = joblib.load('traders/models/model_best.sav')
         self.backward_steps = backward_steps
         # per ignorare SettingWithCopyWarning
         pd.options.mode.chained_assignment = None

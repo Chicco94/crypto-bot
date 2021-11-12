@@ -131,4 +131,4 @@ dmypy.json
 
 # models and data
 src/data/*
-src/traders/models/*
+src/traders/agent_trader/models/*
